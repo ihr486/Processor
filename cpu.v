@@ -12,35 +12,88 @@ module CPU(CLK, N_RST, SEG_A, SEG_B, SEG_C, SEG_D, SEG_E, SEG_F, SEG_G, SEG_H, S
 	wire [31:0] IOD, IOQ;
 	wire IOE;
 	
-	reg [31:0] OUT[0:15];
-	wire [31:0] IN[0:15];
+	reg [15:0] OUT[0:15];
+	wire [15:0] IN[0:15];
+	
+	reg [15:0] PWM_CNT;
+	reg [2:0] PWM_PRESC;
+	reg PWM_ON, FRC_ON;
+	reg [31:0] FRC_CNT, FRC_CAPTURE;
+	wire [15:0] PWM_PERIOD, PWM_DUTY;
+	
+	assign PWM_PERIOD = OUT[9];
+	assign PWM_DUTY = OUT[10];
 	
 	always @(posedge CLK or negedge N_RST) begin
 		if(~N_RST) begin
-			OUT[0] <= 32'b0;
-			OUT[1] <= 32'b0;
-			OUT[2] <= 32'b0;
-			OUT[3] <= 32'b0;
-			OUT[4] <= 32'b0;
-			OUT[5] <= 32'b0;
-			OUT[6] <= 32'b0;
-			OUT[7] <= 32'b0;
-			OUT[8] <= 32'b0;
-			OUT[9] <= 32'b0;
-			OUT[10] <= 32'b0;
-			OUT[11] <= 32'b0;
-			OUT[12] <= 32'b0;
-			OUT[13] <= 32'b0;
-			OUT[14] <= 32'b0;
-			OUT[15] <= 32'b0;
+			OUT[0] <= 16'b0;
+			OUT[1] <= 16'b0;
+			OUT[2] <= 16'b0;
+			OUT[3] <= 16'b0;
+			OUT[4] <= 16'b0;
+			OUT[5] <= 16'b0;
+			OUT[6] <= 16'b0;
+			OUT[7] <= 16'b0;
+			OUT[8] <= 16'b0;
+			OUT[9] <= 16'b0;
+			OUT[10] <= 16'b0;
+			OUT[11] <= 16'b0;
+			OUT[12] <= 16'b0;
+			OUT[13] <= 16'b0;
+			OUT[14] <= 16'b0;
+			OUT[15] <= 16'b0;
+			PWM_CNT <= 16'b0;
+			PWM_PRESC <= 3'b0;
+			PWM_ON <= 1'b0;
+			FRC_ON <= 1'b0;
+			FRC_CNT <= 32'b0;
+			FRC_CAPTURE <= 32'b0;
 		end else begin
 			if(IOE) begin
-				OUT[IOA] <= IOD;
+				OUT[IOA] <= IOD[15:0];
+			end
+			if(OUT[11][0]) begin
+				OUT[11][0] <= 1'b0;
+				if(~PWM_ON) begin
+					PWM_ON <= 1'b1;
+					PWM_CNT <= 16'b0;
+					PWM_PRESC <= 3'b0;
+				end
+			end
+			if(OUT[11][1]) begin
+				OUT[11][1] <= 1'b0;
+				PWM_ON <= 1'b0;
+			end
+			if(OUT[11][2]) begin
+				OUT[11][2] <= 1'b0;
+				if(~FRC_ON) begin
+					FRC_ON <= 1'b1;
+					FRC_CNT <= {OUT[13][15:0], OUT[12][15:0]};
+				end
+			end
+			if(OUT[11][3]) begin
+				OUT[11][3] <= 1'b0;
+				FRC_ON <= 1'b0;
+			end
+			if(OUT[11][4]) begin
+				OUT[11][4] <= 1'b0;
+				FRC_CAPTURE <= FRC_CNT;
+			end
+			if(PWM_ON) begin
+				PWM_PRESC <= PWM_PRESC + 3'b1;
+				if(PWM_PRESC == 3'b0) begin
+					PWM_CNT <= (PWM_CNT == PWM_PERIOD) ? 16'b0 : (PWM_CNT + 16'b1);
+				end
+			end
+			if(FRC_ON) begin
+				FRC_CNT <= FRC_CNT + 32'b1;
 			end
 		end
 	end
 	
-	assign IOQ = IN[IOA];
+	assign BZ = PWM_ON & (PWM_CNT <= PWM_DUTY);
+	
+	assign IOQ = {16'b0, IN[IOA]};
 	
 	assign SEG_A = OUT[0][7:0];
 	assign SEG_B = OUT[1][7:0];
@@ -51,24 +104,23 @@ module CPU(CLK, N_RST, SEG_A, SEG_B, SEG_C, SEG_D, SEG_E, SEG_F, SEG_G, SEG_H, S
 	assign SEG_G = OUT[6][7:0];
 	assign SEG_H = OUT[7][7:0];
 	assign SEG_SEL = OUT[8][8:0];
-	assign BZ = OUT[9][0];
 	
-	assign IN[0] = {28'b0, HEX_A[3:0]};
-	assign IN[1] = {28'b0, HEX_B[3:0]};
-	assign IN[2] = {24'b0, DIP_A[7:0]};
-	assign IN[3] = {24'b0, DIP_B[7:0]};
-	assign IN[4] = {27'b0, PSW_A[4:0]};
-	assign IN[5] = {27'b0, PSW_B[4:0]};
-	assign IN[6] = {27'b0, PSW_C[4:0]};
-	assign IN[7] = {27'b0, PSW_D[4:0]};
-	assign IN[8] = 32'b0;
-	assign IN[9] = 32'b0;
-	assign IN[10] = 32'b0;
-	assign IN[11] = 32'b0;
-	assign IN[12] = 32'b0;
-	assign IN[13] = 32'b0;
-	assign IN[14] = 32'b0;
-	assign IN[15] = 32'b0;
+	assign IN[0] = {12'b0, HEX_A[3:0]};
+	assign IN[1] = {12'b0, HEX_B[3:0]};
+	assign IN[2] = {8'b0, DIP_A[7:0]};
+	assign IN[3] = {8'b0, DIP_B[7:0]};
+	assign IN[4] = {11'b0, PSW_A[4:0]};
+	assign IN[5] = {11'b0, PSW_B[4:0]};
+	assign IN[6] = {11'b0, PSW_C[4:0]};
+	assign IN[7] = {11'b0, PSW_D[4:0]};
+	assign IN[8] = PWM_CNT;
+	assign IN[9] = OUT[9];
+	assign IN[10] = OUT[10];
+	assign IN[11] = 16'b0;
+	assign IN[12] = 16'b0;
+	assign IN[13] = 16'b0;
+	assign IN[14] = FRC_CAPTURE[15:0];
+	assign IN[15] = FRC_CAPTURE[31:16];
 	
 	wire [9:0] IA;
 	wire [10:0] DA;

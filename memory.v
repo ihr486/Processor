@@ -123,7 +123,7 @@ module memory (
 		altsyncram_component.wrcontrol_aclr_a = "NONE",
 		altsyncram_component.wrcontrol_aclr_b = "NONE",
 		altsyncram_component.wrcontrol_wraddress_reg_b = "CLOCK0",
-		altsyncram_component.init_file = "pi.mif";
+		altsyncram_component.init_file = "pi2.mif";
 
 
 endmodule

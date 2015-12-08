@@ -20,7 +20,7 @@ module test_cpu;
 		#5 N_RST = 1'b0;
 		#5 N_RST = 1'b1;
 		
-		for(i = 0; i < 500000; i = i + 1) begin
+		for(i = 0; i < 50000; i = i + 1) begin
 			#5 CLK = ~CLK;
 		end
 	end

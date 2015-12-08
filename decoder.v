@@ -29,7 +29,7 @@ module DECODER(CLK, N_RST, IR, PC, ALU_OP, ALUa_OP, RA1, RA2, WA1, IM16, IMA, HA
 	wire PUSH, POP, PUSHPOP, RETURN, BRANCH;
 	wire CALL, JUMP, IMM_LOAD, LOAD, STORE;
 	wire REG_OP, LDST, MOV, NOP, IMM_OP, NN_OP;
-	wire SHIFT, COND_BRANCH;
+	wire SHIFT, COND_BRANCH, HALT_OP;
 	
 	function [31:0] decode;
 		input [31:0] INST;
@@ -78,25 +78,6 @@ module DECODER(CLK, N_RST, IR, PC, ALU_OP, ALUa_OP, RA1, RA2, WA1, IM16, IMA, HA
 	
 	assign INSTFLAG = decode(IR);
 	
-	/*assign PUSH = (IR[31:27] == 5'b01010) ? 1'b1 : 1'b0;
-	assign POP = (IR[31:27] == 5'b01011) ? 1'b1 : 1'b0;
-	assign PUSHPOP = PUSH | POP;
-	assign RETURN = (IR[31:25] == 7'b1100001) ? 1'b1 : 1'b0;
-	assign CALL = (IR[31:20] == 12'b111111111101) ? 1'b1 : 1'b0;
-	assign JUMP = (IR[31:27] == 5'b11111) ? 1'b1 : 1'b0;
-	assign IMM_LOAD = (IR[31:29] == 3'b011) ? 1'b1 : 1'b0;
-	assign BRANCH = (IR[31:28] == 4'b1001 && IR[22]) ? 1'b1 : 1'b0;
-	assign LOAD = (IR[31:25] == 7'b1000101) ? 1'b1 : 1'b0;
-	assign STORE = (IR[31:25] == 7'b1000100 && ~IR[23]) ? 1'b1 : 1'b0;
-	assign REG_OP = (IR[31:30] == 2'b00) ? 1'b1 : 1'b0;
-	assign LDST = (IR[23:22] == 2'b01 && ~IR[28]) ? 1'b1 : 1'b0;
-	assign MOV = (IR[23:22] == 2'b11 && IR[31:27] == 5'b10001) ? 1'b1 : 1'b0;
-	assign NOP = (IR[23:22] == 2'b10 && IR[31:28] == 4'b1001) ? 1'b1 : 1'b0;
-	assign IMM_OP = (IR[23:22] == 2'b11 && IR[31:27] == 5'b10000) ? 1'b1 : 1'b0;
-	assign NN_OP = (IR[23:22] == 2'b11 && IR[31:27] == 5'b11110) ? 1'b1 : 1'b0;
-	assign SHIFT = (IR[23:22] == 2'b11 && IR[31:28] == 4'b1100) ? 1'b1 : 1'b0;
-	assign COND_BRANCH = (IR[23:22] == 2'b01 && IR[31:28] == 4'b1001) ? 1'b1 : 1'b0;*/
-	
 	assign PUSH = INSTFLAG[5];
 	assign POP = INSTFLAG[6];
 	assign PUSHPOP = PUSH | POP;
@@ -115,6 +96,7 @@ module DECODER(CLK, N_RST, IR, PC, ALU_OP, ALUa_OP, RA1, RA2, WA1, IM16, IMA, HA
 	assign NN_OP = INSTFLAG[12];
 	assign SHIFT = INSTFLAG[13];
 	assign COND_BRANCH = INSTFLAG[2];
+	assign HALT_OP = INSTFLAG[8];
 	
 	wire [2:0] R1, R2, R3;
 	
@@ -163,7 +145,7 @@ module DECODER(CLK, N_RST, IR, PC, ALU_OP, ALUa_OP, RA1, RA2, WA1, IM16, IMA, HA
 	assign HAZARD_LSU = BRAKE_IN[10] & (CALL | PUSHPOP | RETURN | LDST);
 	
 	assign STALL = VALID & (HAZARD_RAL | HAZARD_RALa | HAZARD_FLAG | |{HAZARD_REG[7:0]} | HAZARD_LSU | BRAKE_IN[9]);
-	assign HALT = (VALID & ((BRANCH | JUMP | RETURN) & ~STALL)) | STOP;
+	assign HALT = (VALID & ((BRANCH | JUMP | RETURN | HALT_OP | CALL) & ~STALL)) | STOP;
 	assign BRAKE_OUT[9] = BRAKE_IN[9] | (VALID & (HALT | STALL));
 	
 	always @(posedge CLK or negedge N_RST) begin
@@ -190,86 +172,8 @@ module DECODER(CLK, N_RST, IR, PC, ALU_OP, ALUa_OP, RA1, RA2, WA1, IM16, IMA, HA
 				LSU_OP <= 0;
 			end else begin
 				LSU_OP <= {CALL | PUSH | STORE, POP | LOAD, RETURN, R3};
-				STOP <= INSTFLAG[8];
+				STOP <= HALT_OP;
 				DEC_OP <= INSTFLAG[29:20];
-				/*if(LDST) begin
-					DEC_OP <= {4'd0, 6'b010000};
-				end else if(INSTFLAG[2]) begin
-					DEC_OP <= {4'd0, 6'b011010};
-				end else if(IMM_LOAD) begin
-					DEC_OP <= {4'd9, 6'b010100};
-				end else if(RETURN) begin
-					DEC_OP <= {4'd14, 6'b000100};
-				end else if(PUSH) begin
-					DEC_OP <= {4'd8, 6'b000100};
-				end else if(POP) begin
-					DEC_OP <= {4'd14, 6'b000100};
-				end else if(MOV) begin
-					DEC_OP <= {4'd2, 6'b000100};
-				end else if(REG_OP) begin
-					DEC_OP <= {1'b0, IR[29:27], 6'b100100};
-				end else if(INSTFLAG[11]) begin
-					DEC_OP <= {1'b0, IR[21:19], 6'b110100};
-				end else if(INSTFLAG[12]) begin
-					DEC_OP <= {IR[22:19], 6'b100100};
-				end else if(INSTFLAG[13]) begin
-					DEC_OP <= {IR[22:19], 6'b110100};
-				end else if(CALL) begin
-					DEC_OP <= {4'd8, 6'b001101};
-				end else if(JUMP) begin
-					DEC_OP <= {4'd2, 6'b001101};
-				end else begin
-					DEC_OP <= 0;
-				end*/
-				/*if(IR[23:22] == 2'b01) begin
-					if(IR[31:28] == 4'b1000) begin				//zLD(IR[25] == 1) or zST(IR[25] == 0)
-						DEC_OP <= {4'd0, 6'b010000};
-					end else if(IR[31:28] == 4'b1001) begin	//zBcc
-						DEC_OP <= {4'd0, 6'b011010};
-					end else begin										//Illegal instruction
-						DEC_OP <= 0;
-						STOP <= 1'b1;
-					end
-				end else if(IR[23:22] == 2'b10) begin
-					if(IR[31:29] == 3'b011) begin					//zLIL
-						DEC_OP <= {4'd9, 6'b010100};
-					end else if(IR[31:29] == 3'b110) begin		//zRET
-						DEC_OP <= {4'd14, 6'b000100};
-					end else if(IR[31:27] == 5'b01010) begin	//zPUSH
-						DEC_OP <= {4'd8, 6'b000100};
-					end else if(IR[31:27] == 5'b01011) begin	//zPOP
-						DEC_OP <= {4'd14, 6'b000100};
-					end else if(IR[31:30] == 2'b10) begin		//zNOP
-						DEC_OP <= 0;
-					end else begin										//zHLT or illegal instruction
-						DEC_OP <= 0;
-						STOP <= 1'b1;
-					end
-				end else if(IR[23:22] == 2'b11) begin
-					if(IR[31:26] == 6'b100010) begin				//zMOV
-						DEC_OP <= {4'd2, 6'b000100};
-					end else if(IR[31:30] == 2'b00) begin		//zADD,zSUB,zCMP,zAND,zOR,zXOR
-						DEC_OP <= {1'b0, IR[29:27], 6'b100100};
-					end else if(IR[31:26] == 6'b100000) begin	//zADDI,zSUBI,zCMPI,zANDI,zORI,zXORI
-						DEC_OP <= {1'b0, IR[21:19], 6'b110100};
-					end else if(IR[31:26] == 6'b111101) begin	//zNEG,zNOT
-						DEC_OP <= {IR[22:19], 6'b100100};
-					end else if(IR[31:26] == 6'b110000) begin	//zSLL,zSLA,zSRL,zSRA
-						DEC_OP <= {IR[22:19], 6'b110100};
-					end else if(IR[31:26] == 6'b100100) begin	//zB
-						DEC_OP <= {4'd0, 6'b011001};
-					end else if(IR[31:20] == 12'b111111111101) begin	//zJALR
-						DEC_OP <= {4'd8, 6'b001101};
-					end else if(IR[31:20] == 12'b111111111110) begin	//zJR
-						DEC_OP <= {4'd2, 6'b001101};
-					end else begin										//Illegal instruction
-						DEC_OP <= 0;
-						STOP <= 1'b1;
-					end
-				end else begin	//Illegal instruction
-					DEC_OP <= 0;
-					STOP <= 1'b1;
-				end*/
 			end
 		end
 	end
